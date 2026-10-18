@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>lp-lazy</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #101827;
+        --panel: #111827;
+        --panel-border: #263244;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #10b981;
+        --warn: #f59e0b;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        width: 320px;
+        min-height: 220px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .panel {
+        padding: 14px 14px 10px;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 18px;
+        letter-spacing: 0.03em;
+      }
+
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        background: rgba(255,255,255,0.02);
+        border: 1px solid var(--panel-border);
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        background: var(--warn);
+        box-shadow: 0 0 0 2px rgba(245,158,11,0.2);
+      }
+
+      .dot.done {
+        background: var(--accent);
+        box-shadow: 0 0 0 2px rgba(16,185,129,0.2);
+      }
+
+      .message {
+        font-size: 13px;
+        line-height: 1.4;
+        color: var(--text);
+      }
+
+      .summary {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 0 0 12px;
+      }
+
+      .details {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.4;
+        margin: 0 0 12px;
+        min-height: 28px;
+      }
+
+      .sellers {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 12px;
+        color: var(--text);
+      }
+
+      .sellers li + li {
+        margin-top: 4px;
+      }
+
+      .empty {
+        color: var(--muted);
+        font-size: 12px;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <h1>lp-lazy</h1>
+
+      <div class="status">
+        <span id="dot" class="dot"></span>
+        <span id="statusText" class="message">Checking page…</span>
+      </div>
+
+      <p id="summary" class="summary">Waiting for scan results.</p>
+      <p id="details" class="details">Checking listings as they load…</p>
+      <ul id="sellerList" class="sellers"></ul>
+      <p id="emptyState" class="empty" hidden>No flagged sellers yet.</p>
+    </div>
+
+    <script type="module">
+      const statusText = document.getElementById('statusText');
+      const summary = document.getElementById('summary');
+      const details = document.getElementById('details');
+      const dot = document.getElementById('dot');
+      const sellerList = document.getElementById('sellerList');
+      const emptyState = document.getElementById('emptyState');
+
+      function renderStatus(scanStatus) {
+        const status = scanStatus || { state: 'idle', message: 'Waiting for page scan…', sellers: [], currentSeller: null, details: '', sellerResults: [] };
+
+        statusText.textContent = status.message || 'Waiting for page scan…';
+        dot.classList.toggle('done', status.state === 'done');
+
+        const sellerResults = Array.isArray(status.sellerResults) ? status.sellerResults : [];
+
+        if (status.state === 'done') {
+          const sellers = sellerResults.length ? sellerResults : (Array.isArray(status.sellers) ? status.sellers : []);
+          const eligibleCount = sellers.filter((seller) => seller && seller.eligible).length;
+          const checkedCount = sellerResults.length || sellers.length;
+
+          summary.textContent = checkedCount
+            ? `Checked ${checkedCount} seller(s): ${eligibleCount} eligible, ${checkedCount - eligibleCount} not eligible.`
+            : 'Scan complete — no sellers were checked.';
+          details.textContent = status.currentSeller
+            ? `Last checked seller: ${status.currentSeller}`
+            : 'No active seller signal detected yet.';
+
+          sellerList.innerHTML = '';
+          if (sellerResults.length) {
+            sellerResults.forEach((seller) => {
+              const item = document.createElement('li');
+
+              const name = document.createElement('strong');
+              name.textContent = seller.sellerName || 'Unknown seller';
+
+              const label = document.createElement('span');
+              label.textContent = seller.eligible
+                ? ` — eligible: ${seller.status}`
+                : ` — not eligible: ${seller.status}`;
+
+              const reasons = document.createElement('div');
+              const reasonText = seller.reasons && seller.reasons.length
+                ? seller.reasons.join('; ')
+                : 'No LP bulk-lister signal met the minimum threshold.';
+              reasons.textContent = reasonText;
+              reasons.style.color = '#9ca3af';
+              reasons.style.marginTop = '2px';
+
+              item.appendChild(name);
+              item.appendChild(label);
+              item.appendChild(reasons);
+              sellerList.appendChild(item);
+            });
+            emptyState.hidden = true;
+          } else if (sellers.length) {
+            sellers.forEach((seller) => {
+              const item = document.createElement('li');
+              item.textContent = seller;
+              sellerList.appendChild(item);
+            });
+            emptyState.hidden = true;
+          } else {
+            emptyState.hidden = false;
+          }
+        } else {
+          summary.textContent = status.currentSeller
+            ? `Currently checking: ${status.currentSeller}`
+            : 'Scanning listings on the current page…';
+          details.textContent = status.details || 'Looking for Light Play inventory patterns and seller behavior signals.';
+          sellerList.innerHTML = '';
+          emptyState.hidden = true;
+        }
+      }
+
+      async function loadStatus() {
+        const result = await chrome.storage.local.get('scanStatus');
+        renderStatus(result.scanStatus);
+      }
+
+      chrome.storage.onChanged.addListener((changes) => {
+        if (changes.scanStatus) {
+          renderStatus(changes.scanStatus.newValue);
+        }
+      });
+
+      loadStatus();
+    </script>
+  </body>
+</html>

@@ -1,8 +1,34 @@
-import { SellerProfile, EvaluationResult, ListingObservation } from '../types';
+import type {
+  SellerProfile,
+  EvaluationResult,
+  ListingObservation,
+  SellerEligibilitySummary,
+} from '../types/index.ts';
+
+async function getSellerProfiles(): Promise<Record<string, SellerProfile>> {
+  const storage = chrome.storage.session || chrome.storage.local;
+  const data = await storage.get(['sellerProfiles']);
+  return data.sellerProfiles || {};
+}
+
+async function saveSellerProfiles(profiles: Record<string, SellerProfile>): Promise<void> {
+  const storage = chrome.storage.session || chrome.storage.local;
+  await storage.set({ sellerProfiles: profiles });
+}
+
+export function applyAuditResult(
+  profile: SellerProfile,
+  auditResults: NonNullable<SellerProfile['auditResults']>
+): SellerProfile {
+  return {
+    ...profile,
+    audited: true,
+    auditResults,
+  };
+}
 
 export async function registerObservation(obs: ListingObservation): Promise<SellerProfile> {
-  const data = await chrome.storage.session.get(['sellerProfiles']);
-  const profiles: Record<string, SellerProfile> = data.sellerProfiles || {};
+  const profiles = await getSellerProfiles();
 
   const profile = profiles[obs.sellerId] || {
     sellerId: obs.sellerId,
@@ -13,8 +39,33 @@ export async function registerObservation(obs: ListingObservation): Promise<Sell
   profile.observations.push(obs);
   profiles[obs.sellerId] = profile;
 
-  await chrome.storage.session.set({ sellerProfiles: profiles });
+  await saveSellerProfiles(profiles);
   return profile;
+}
+
+export function describeSellerEligibility(
+  profile: SellerProfile,
+  evalResult: EvaluationResult = evaluateSeller(profile)
+): SellerEligibilitySummary {
+  const reasons = evalResult.reasons.length
+    ? evalResult.reasons
+    : ['No LP bulk-lister signal met the minimum threshold.'];
+
+  const status = evalResult.shouldBadge
+    ? evalResult.confidence === 'HIGH'
+      ? '🎯 Stealth NM'
+      : '⚡ Likely Conservative LP'
+    : 'Not eligible';
+
+  return {
+    sellerId: profile.sellerId,
+    sellerName: profile.sellerName,
+    eligible: evalResult.shouldBadge,
+    status,
+    confidence: evalResult.confidence,
+    score: evalResult.score,
+    reasons,
+  };
 }
 
 export function evaluateSeller(profile: SellerProfile): EvaluationResult {

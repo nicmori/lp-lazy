@@ -25,3 +25,13 @@ export interface EvaluationResult {
   score: number;
   reasons: string[];
 }
+
+export interface SellerEligibilitySummary {
+  sellerId: string;
+  sellerName: string;
+  eligible: boolean;
+  status: '🎯 Stealth NM' | '⚡ Likely Conservative LP' | 'Not eligible';
+  confidence: EvaluationResult['confidence'];
+  score: number;
+  reasons: string[];
+}
