@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { describeSellerEligibility } from '../src/content/aggregator.ts';
+import { extractSellerIdentityFromHref } from '../src/content/parser.ts';
 import type { SellerProfile } from '../src/types/index.ts';
 
 test('describeSellerEligibility includes the LP bulk-lister status for eligible sellers', () => {
@@ -49,4 +50,13 @@ test('describeSellerEligibility explains why a seller is not eligible', () => {
   assert.equal(result.eligible, false);
   assert.equal(result.status, 'Not eligible');
   assert.match(result.reasons[0], /minimum|threshold|No LP bulk-lister signal/i);
+});
+
+test('extractSellerIdentityFromHref handles TCGplayer seller URLs', () => {
+  const result = extractSellerIdentityFromHref('https://www.tcgplayer.com/sellers/PokemonJane/18a2f769');
+
+  assert.deepEqual(result, {
+    sellerName: 'PokemonJane',
+    sellerId: 'PokemonJane',
+  });
 });
