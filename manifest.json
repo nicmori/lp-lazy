@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "lp-lazy",
+  "version": "1.0.0",
+  "description": "Flags sellers who blanket-list Near Mint cards as Light Play.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.tcgplayer.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background/background.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.tcgplayer.com/product/*"],
+      "js": ["src/content/index.ts"],
+      "run_at": "document_idle"
+    }
+  ]
+}
