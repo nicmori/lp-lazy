@@ -1,10 +1,18 @@
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'AUDIT_SELLER') {
-    auditSellerStorefront(message.sellerId).then((auditResults) => {
-      sendResponse({ auditResults });
-    });
+    void (async () => {
+      try {
+        const auditResults = await auditSellerStorefront(message.sellerId);
+        sendResponse({ auditResults });
+      } catch (error) {
+        console.warn('AUDIT_SELLER failed while background context was active:', error);
+        sendResponse({ auditResults: null });
+      }
+    })();
     return true;
   }
+
+  return false;
 });
 
 async function auditSellerStorefront(sellerId: string) {

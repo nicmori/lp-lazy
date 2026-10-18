@@ -1,6 +1,6 @@
 import { EvaluationResult } from '../types';
 
-export function injectBadge(row: Element, evalResult: EvaluationResult) {
+export function injectBadge(row: Element, evalResult: EvaluationResult, sellerName: string) {
   if (!evalResult.shouldBadge) return;
 
   const targetContainer = row.querySelector('.seller-info') || row;
@@ -11,6 +11,9 @@ export function injectBadge(row: Element, evalResult: EvaluationResult) {
     badge.className = 'tcg-nm-badge';
     targetContainer.appendChild(badge);
   }
+
+  row.setAttribute('data-lp-lazy-badged', 'true');
+  row.setAttribute('data-lp-lazy-seller-name', sellerName);
 
   const isHigh = evalResult.confidence === 'HIGH';
   const bgColor = isHigh ? '#059669' : '#d97706';
