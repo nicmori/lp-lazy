@@ -1,7 +1,12 @@
-import { parseProductSetRecency, parseListingRow, findListingRows } from './parser';
-import { registerObservation, evaluateSeller, applyAuditResult } from './aggregator';
-import { injectBadge } from './badge';
-import { canObserveDocument, getObservationRoot } from './domSafety';
+import { parseProductSetRecency, parseListingRow, findListingRows } from './parser.ts';
+import {
+  registerObservation,
+  evaluateSeller,
+  applyAuditResult,
+  describeSellerEligibility,
+} from './aggregator.ts';
+import { injectBadge } from './badge.ts';
+import { canObserveDocument, getObservationRoot } from './domSafety.ts';
 
 const isRecentSet = parseProductSetRecency();
 let scanRetries = 0;
@@ -34,7 +39,8 @@ function setScanStatus(
   message: string,
   sellers: string[] = [],
   currentSeller?: string,
-  details?: string
+  details?: string,
+  sellerResults: ReturnType<typeof describeSellerEligibility>[] = []
 ) {
   if (!isRuntimeAvailable()) {
     return;
@@ -48,6 +54,7 @@ function setScanStatus(
         sellers,
         currentSeller: currentSeller || null,
         details: details || '',
+        sellerResults,
         updatedAt: Date.now(),
       },
     }).catch(() => {
@@ -95,12 +102,22 @@ async function processPageListings() {
     setScanStatus('scanning', 'Scanning sellers on this page…');
 
     const pendingAudits = { value: 0 };
+    const checkedSellers = new Map<string, ReturnType<typeof describeSellerEligibility>>();
     const finalize = () => {
-      const sellers = summarizeFlaggedSellers();
-      if (sellers.length > 0) {
-        setScanStatus('done', `Scan complete — ${sellers.length} seller(s) flagged.`, sellers);
+      const sellerResults = Array.from(checkedSellers.values());
+      const sellers = sellerResults.map((seller) => seller.sellerName);
+      const eligibleCount = sellerResults.filter((seller) => seller.eligible).length;
+      if (sellerResults.length > 0) {
+        setScanStatus(
+          'done',
+          `Scan complete — checked ${sellerResults.length} seller(s) (${eligibleCount} eligible).`,
+          sellers,
+          undefined,
+          '',
+          sellerResults
+        );
       } else {
-        setScanStatus('done', 'Scan complete — no sellers were flagged.', []);
+        setScanStatus('done', 'Scan complete — no sellers were checked.', [], undefined, '', []);
       }
     };
 
@@ -121,6 +138,7 @@ async function processPageListings() {
 
       const profile = await registerObservation(obs);
       let evalResult = evaluateSeller(profile);
+      checkedSellers.set(obs.sellerId, describeSellerEligibility(profile, evalResult));
 
       if (!evalResult.shouldBadge && obs.condition.toLowerCase().includes('light play') && !profile.audited) {
         pendingAudits.value += 1;
@@ -158,6 +176,7 @@ async function processPageListings() {
                   profile.audited = nextProfile.audited;
                   profile.auditResults = nextProfile.auditResults;
                   evalResult = evaluateSeller(profile);
+                  checkedSellers.set(obs.sellerId, describeSellerEligibility(profile, evalResult));
                 } catch {
                   // This page may have been torn down while the async audit was still resolving.
                 }
@@ -171,6 +190,8 @@ async function processPageListings() {
       } else {
         injectBadge(row, evalResult, obs.sellerName);
       }
+
+      checkedSellers.set(obs.sellerId, describeSellerEligibility(profile, evalResult));
     }
 
     completeScanIfReady(pendingAudits, finalize);

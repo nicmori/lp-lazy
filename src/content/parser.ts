@@ -1,4 +1,4 @@
-import { ListingObservation } from '../types';
+import type { ListingObservation } from '../types/index.ts';
 
 export function parseProductSetRecency(): boolean {
   const setElement = document.querySelector(

@@ -1,4 +1,4 @@
-import { EvaluationResult } from '../types';
+import type { EvaluationResult } from '../types/index.ts';
 
 export function injectBadge(row: Element, evalResult: EvaluationResult, sellerName: string) {
   if (!evalResult.shouldBadge) return;

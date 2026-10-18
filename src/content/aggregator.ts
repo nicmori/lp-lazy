@@ -1,4 +1,9 @@
-import { SellerProfile, EvaluationResult, ListingObservation } from '../types';
+import type {
+  SellerProfile,
+  EvaluationResult,
+  ListingObservation,
+  SellerEligibilitySummary,
+} from '../types/index.ts';
 
 async function getSellerProfiles(): Promise<Record<string, SellerProfile>> {
   const storage = chrome.storage.session || chrome.storage.local;
@@ -36,6 +41,31 @@ export async function registerObservation(obs: ListingObservation): Promise<Sell
 
   await saveSellerProfiles(profiles);
   return profile;
+}
+
+export function describeSellerEligibility(
+  profile: SellerProfile,
+  evalResult: EvaluationResult = evaluateSeller(profile)
+): SellerEligibilitySummary {
+  const reasons = evalResult.reasons.length
+    ? evalResult.reasons
+    : ['No LP bulk-lister signal met the minimum threshold.'];
+
+  const status = evalResult.shouldBadge
+    ? evalResult.confidence === 'HIGH'
+      ? '🎯 Stealth NM'
+      : '⚡ Likely Conservative LP'
+    : 'Not eligible';
+
+  return {
+    sellerId: profile.sellerId,
+    sellerName: profile.sellerName,
+    eligible: evalResult.shouldBadge,
+    status,
+    confidence: evalResult.confidence,
+    score: evalResult.score,
+    reasons,
+  };
 }
 
 export function evaluateSeller(profile: SellerProfile): EvaluationResult {

@@ -124,22 +124,53 @@
       const emptyState = document.getElementById('emptyState');
 
       function renderStatus(scanStatus) {
-        const status = scanStatus || { state: 'idle', message: 'Waiting for page scan…', sellers: [], currentSeller: null, details: '' };
+        const status = scanStatus || { state: 'idle', message: 'Waiting for page scan…', sellers: [], currentSeller: null, details: '', sellerResults: [] };
 
         statusText.textContent = status.message || 'Waiting for page scan…';
         dot.classList.toggle('done', status.state === 'done');
 
+        const sellerResults = Array.isArray(status.sellerResults) ? status.sellerResults : [];
+
         if (status.state === 'done') {
-          const sellers = Array.isArray(status.sellers) ? status.sellers : [];
-          summary.textContent = sellers.length
-            ? `Detected ${sellers.length} seller(s) flagged.`
-            : 'Scan complete — no sellers were flagged.';
+          const sellers = sellerResults.length ? sellerResults : (Array.isArray(status.sellers) ? status.sellers : []);
+          const eligibleCount = sellers.filter((seller) => seller && seller.eligible).length;
+          const checkedCount = sellerResults.length || sellers.length;
+
+          summary.textContent = checkedCount
+            ? `Checked ${checkedCount} seller(s): ${eligibleCount} eligible, ${checkedCount - eligibleCount} not eligible.`
+            : 'Scan complete — no sellers were checked.';
           details.textContent = status.currentSeller
             ? `Last checked seller: ${status.currentSeller}`
             : 'No active seller signal detected yet.';
 
           sellerList.innerHTML = '';
-          if (sellers.length) {
+          if (sellerResults.length) {
+            sellerResults.forEach((seller) => {
+              const item = document.createElement('li');
+
+              const name = document.createElement('strong');
+              name.textContent = seller.sellerName || 'Unknown seller';
+
+              const label = document.createElement('span');
+              label.textContent = seller.eligible
+                ? ` — eligible: ${seller.status}`
+                : ` — not eligible: ${seller.status}`;
+
+              const reasons = document.createElement('div');
+              const reasonText = seller.reasons && seller.reasons.length
+                ? seller.reasons.join('; ')
+                : 'No LP bulk-lister signal met the minimum threshold.';
+              reasons.textContent = reasonText;
+              reasons.style.color = '#9ca3af';
+              reasons.style.marginTop = '2px';
+
+              item.appendChild(name);
+              item.appendChild(label);
+              item.appendChild(reasons);
+              sellerList.appendChild(item);
+            });
+            emptyState.hidden = true;
+          } else if (sellers.length) {
             sellers.forEach((seller) => {
               const item = document.createElement('li');
               item.textContent = seller;
